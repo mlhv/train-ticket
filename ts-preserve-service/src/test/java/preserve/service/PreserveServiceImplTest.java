@@ -154,6 +154,36 @@ public class PreserveServiceImplTest {
             activeSpan.verify(() -> ActiveSpan.tag("workflow", "preserve"));
             activeSpan.verify(() -> ActiveSpan.tag("tripId", "G1255"));
             activeSpan.verify(() -> ActiveSpan.tag("seatTypeRequested", "2"));
+            activeSpan.verify(() -> ActiveSpan.tag("security.status", "pass"));
+        }
+    }
+
+    @Test
+    public void testPreserve_securityCheckFailed() {
+        OrderTicketsInfo oti = OrderTicketsInfo.builder()
+                .accountId(UUID.randomUUID().toString())
+                .contactsId(UUID.randomUUID().toString())
+                .from("from_station")
+                .to("to_station")
+                .date(StringUtils.Date2String(new Date()))
+                .tripId("G1255")
+                .seatType(2)
+                .build();
+
+        Response securityFail = new Response<>(0, "Security check failed", null);
+        ResponseEntity<Response> reSecurityFail = new ResponseEntity<>(securityFail, HttpStatus.OK);
+        Mockito.when(restTemplate.exchange(
+                Mockito.anyString(),
+                Mockito.any(HttpMethod.class),
+                Mockito.any(HttpEntity.class),
+                Mockito.any(Class.class)))
+                .thenReturn(reSecurityFail);
+
+        try (MockedStatic<ActiveSpan> activeSpan = Mockito.mockStatic(ActiveSpan.class)) {
+            Response result = preserveServiceImpl.preserve(oti, headers);
+            Assert.assertEquals(new Response<>(0, "Security check failed", null), result);
+
+            activeSpan.verify(() -> ActiveSpan.tag("security.status", "fail"));
         }
     }
 

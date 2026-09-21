@@ -54,6 +54,7 @@ public class PreserveServiceImpl implements PreserveService {
         //PreserveServiceImpl.LOGGER.info("[Step 1] Check Security");
 
         Response result = checkSecurity(oti.getAccountId(), headers);
+        ActiveSpan.tag("security.status", result.getStatus() == 0 ? "fail" : "pass");
         if (result.getStatus() == 0) {
             PreserveServiceImpl.LOGGER.error("[preserve][Step 1][Check Security Fail][AccountId: {}]",oti.getAccountId());
             return new Response<>(0, result.getMsg(), null);
