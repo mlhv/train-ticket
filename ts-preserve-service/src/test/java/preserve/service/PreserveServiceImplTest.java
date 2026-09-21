@@ -32,11 +32,9 @@ public class PreserveServiceImplTest {
     @Mock
     private RestTemplate restTemplate;
 
+    // required by testSendEmail() — without this mock, PreserveServiceImpl.sendService is null and sendEmail() NPEs internally
     @Mock
     private preserve.mq.RabbitSend sendService;
-
-    @Mock
-    private org.springframework.cloud.client.discovery.DiscoveryClient discoveryClient;
 
     private HttpHeaders headers = new HttpHeaders();
     private HttpEntity requestEntity = new HttpEntity(headers);
@@ -100,10 +98,6 @@ public class PreserveServiceImplTest {
         Response<TripAllDetail> response3 = new Response<>(1, null, tripAllDetail);
         ResponseEntity<Response<TripAllDetail>> re3 = new ResponseEntity<>(response3, HttpStatus.OK);
 
-        //response for queryForStationId()
-        Response<String> response4 = new Response<>(null, null, "");
-        ResponseEntity<Response<String>> re4 = new ResponseEntity<>(response4, HttpStatus.OK);
-
         //response for travel result
         TravelResult travelResult = new TravelResult();
         Route route = new Route();
@@ -165,7 +159,7 @@ public class PreserveServiceImplTest {
             activeSpan.verify(() -> ActiveSpan.tag("seat.allocatedNumber", "1"));
             activeSpan.verify(() -> ActiveSpan.tag("order.id", expectedOrderId));
             activeSpan.verify(() -> ActiveSpan.tag("order.price", "1.0"));
-            activeSpan.verify(() -> ActiveSpan.tag("order.status", "1"));
+            activeSpan.verify(() -> ActiveSpan.tag("order.status", "success"));
         }
     }
 
@@ -244,6 +238,78 @@ public class PreserveServiceImplTest {
 
             activeSpan.verify(() -> ActiveSpan.tag("seat.allocatedClass", "SecondClassSeat"));
             activeSpan.verify(() -> ActiveSpan.tag("seat.allocatedNumber", "7"));
+        }
+    }
+
+    @Test
+    public void testPreserve_orderCreationFailed() {
+        OrderTicketsInfo oti = OrderTicketsInfo.builder()
+                .accountId(UUID.randomUUID().toString())
+                .contactsId(UUID.randomUUID().toString())
+                .from("from_station")
+                .to("to_station")
+                .date(StringUtils.Date2String(new Date()))
+                .tripId("G1255")
+                .seatType(2)
+                .build();
+
+        Response securityPass = new Response<>(1, null, null);
+        ResponseEntity<Response> reSecurityPass = new ResponseEntity<>(securityPass, HttpStatus.OK);
+        Mockito.when(restTemplate.exchange(
+                Mockito.anyString(),
+                Mockito.any(HttpMethod.class),
+                Mockito.any(HttpEntity.class),
+                Mockito.any(Class.class)))
+                .thenReturn(reSecurityPass);
+
+        Contacts contacts = new Contacts();
+        contacts.setDocumentNumber("document_number");
+        contacts.setName("name");
+        contacts.setDocumentType(1);
+        Response<Contacts> contactsResponse = new Response<>(1, null, contacts);
+        ResponseEntity<Response<Contacts>> reContacts = new ResponseEntity<>(contactsResponse, HttpStatus.OK);
+
+        TripResponse tripResponse = new TripResponse();
+        tripResponse.setConfortClass(1);
+        tripResponse.setStartTime(StringUtils.Date2String(new Date()));
+        TripAllDetail tripAllDetail = new TripAllDetail(true, "message", tripResponse, new Trip());
+        Response<TripAllDetail> tripDetailResponse = new Response<>(1, null, tripAllDetail);
+        ResponseEntity<Response<TripAllDetail>> reTripDetail = new ResponseEntity<>(tripDetailResponse, HttpStatus.OK);
+
+        TravelResult travelResult = new TravelResult();
+        Route route = new Route();
+        route.setStations(new ArrayList<>());
+        travelResult.setRoute(route);
+        TrainType trainType = new TrainType();
+        trainType.setConfortClass(100);
+        trainType.setEconomyClass(100);
+        travelResult.setTrainType(trainType);
+        travelResult.setPrices( new HashMap<String, String>(){{ put("confortClass", "1.0"); put("economyClass", "0.5"); }} );
+        Response<TravelResult> travelResultResponse = new Response<>(1, null, travelResult);
+        ResponseEntity<Response<TravelResult>> reTravelResult = new ResponseEntity<>(travelResultResponse, HttpStatus.OK);
+
+        Ticket ticket = new Ticket();
+        ticket.setSeatNo(1);
+        Response<Ticket> ticketResponse = new Response<>(1, null, ticket);
+        ResponseEntity<Response<Ticket>> reTicket = new ResponseEntity<>(ticketResponse, HttpStatus.OK);
+
+        Response<Order> orderFailResponse = new Response<>(0, "Create Order Fail", null);
+        ResponseEntity<Response<Order>> reOrderFail = new ResponseEntity<>(orderFailResponse, HttpStatus.OK);
+
+        Mockito.when(restTemplate.exchange(
+                Mockito.anyString(),
+                Mockito.any(HttpMethod.class),
+                Mockito.any(HttpEntity.class),
+                Mockito.any(ParameterizedTypeReference.class)))
+                .thenReturn(reContacts).thenReturn(reTripDetail).thenReturn(reTravelResult)
+                .thenReturn(reTicket).thenReturn(reOrderFail);
+
+        try (MockedStatic<ActiveSpan> activeSpan = Mockito.mockStatic(ActiveSpan.class)) {
+            Response result = preserveServiceImpl.preserve(oti, headers);
+            Assert.assertEquals(new Response<>(0, "Create Order Fail", null), result);
+
+            activeSpan.verify(() -> ActiveSpan.tag("order.status", "fail"));
+            activeSpan.verify(Mockito.never(), () -> ActiveSpan.tag(Mockito.eq("order.id"), Mockito.anyString()));
         }
     }
 
