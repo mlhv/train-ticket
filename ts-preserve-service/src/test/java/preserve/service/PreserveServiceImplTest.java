@@ -155,6 +155,9 @@ public class PreserveServiceImplTest {
             activeSpan.verify(() -> ActiveSpan.tag("tripId", "G1255"));
             activeSpan.verify(() -> ActiveSpan.tag("seatTypeRequested", "2"));
             activeSpan.verify(() -> ActiveSpan.tag("security.status", "pass"));
+            activeSpan.verify(() -> ActiveSpan.tag("seat.confortAvailable", "1"));
+            activeSpan.verify(() -> ActiveSpan.tag("seat.economyAvailable", "0"));
+            activeSpan.verify(() -> ActiveSpan.tag("seat.checkResult", "pass"));
         }
     }
 
@@ -185,6 +188,108 @@ public class PreserveServiceImplTest {
 
             activeSpan.verify(() -> ActiveSpan.tag("security.status", "fail"));
             activeSpan.verify(Mockito.never(), () -> ActiveSpan.tag(Mockito.eq("seat.checkResult"), Mockito.anyString()));
+        }
+    }
+
+    @Test
+    public void testPreserve_seatNotEnough_firstClass() {
+        OrderTicketsInfo oti = OrderTicketsInfo.builder()
+                .accountId(UUID.randomUUID().toString())
+                .contactsId(UUID.randomUUID().toString())
+                .from("from_station")
+                .to("to_station")
+                .date(StringUtils.Date2String(new Date()))
+                .tripId("G1255")
+                .seatType(2)
+                .build();
+
+        Response securityPass = new Response<>(1, null, null);
+        ResponseEntity<Response> reSecurityPass = new ResponseEntity<>(securityPass, HttpStatus.OK);
+        Mockito.when(restTemplate.exchange(
+                Mockito.anyString(),
+                Mockito.any(HttpMethod.class),
+                Mockito.any(HttpEntity.class),
+                Mockito.any(Class.class)))
+                .thenReturn(reSecurityPass);
+
+        Contacts contacts = new Contacts();
+        contacts.setDocumentNumber("document_number");
+        contacts.setName("name");
+        contacts.setDocumentType(1);
+        Response<Contacts> contactsResponse = new Response<>(1, null, contacts);
+        ResponseEntity<Response<Contacts>> reContacts = new ResponseEntity<>(contactsResponse, HttpStatus.OK);
+
+        TripResponse tripResponse = new TripResponse();
+        tripResponse.setConfortClass(0);
+        TripAllDetail tripAllDetail = new TripAllDetail(true, "message", tripResponse, new Trip());
+        Response<TripAllDetail> tripDetailResponse = new Response<>(1, null, tripAllDetail);
+        ResponseEntity<Response<TripAllDetail>> reTripDetail = new ResponseEntity<>(tripDetailResponse, HttpStatus.OK);
+
+        Mockito.when(restTemplate.exchange(
+                Mockito.anyString(),
+                Mockito.any(HttpMethod.class),
+                Mockito.any(HttpEntity.class),
+                Mockito.any(ParameterizedTypeReference.class)))
+                .thenReturn(reContacts).thenReturn(reTripDetail);
+
+        try (MockedStatic<ActiveSpan> activeSpan = Mockito.mockStatic(ActiveSpan.class)) {
+            Response result = preserveServiceImpl.preserve(oti, headers);
+            Assert.assertEquals(new Response<>(0, "Seat Not Enough", null), result);
+
+            activeSpan.verify(() -> ActiveSpan.tag("seat.confortAvailable", "0"));
+            activeSpan.verify(() -> ActiveSpan.tag("seat.checkResult", "not_enough"));
+            activeSpan.verify(Mockito.never(), () -> ActiveSpan.tag(Mockito.eq("price.confortClass"), Mockito.any()));
+        }
+    }
+
+    @Test
+    public void testPreserve_seatNotEnough_secondClass() {
+        OrderTicketsInfo oti = OrderTicketsInfo.builder()
+                .accountId(UUID.randomUUID().toString())
+                .contactsId(UUID.randomUUID().toString())
+                .from("from_station")
+                .to("to_station")
+                .date(StringUtils.Date2String(new Date()))
+                .tripId("G1255")
+                .seatType(3)
+                .build();
+
+        Response securityPass = new Response<>(1, null, null);
+        ResponseEntity<Response> reSecurityPass = new ResponseEntity<>(securityPass, HttpStatus.OK);
+        Mockito.when(restTemplate.exchange(
+                Mockito.anyString(),
+                Mockito.any(HttpMethod.class),
+                Mockito.any(HttpEntity.class),
+                Mockito.any(Class.class)))
+                .thenReturn(reSecurityPass);
+
+        Contacts contacts = new Contacts();
+        contacts.setDocumentNumber("document_number");
+        contacts.setName("name");
+        contacts.setDocumentType(1);
+        Response<Contacts> contactsResponse = new Response<>(1, null, contacts);
+        ResponseEntity<Response<Contacts>> reContacts = new ResponseEntity<>(contactsResponse, HttpStatus.OK);
+
+        TripResponse tripResponse = new TripResponse();
+        tripResponse.setConfortClass(0);
+        tripResponse.setEconomyClass(3);
+        TripAllDetail tripAllDetail = new TripAllDetail(true, "message", tripResponse, new Trip());
+        Response<TripAllDetail> tripDetailResponse = new Response<>(1, null, tripAllDetail);
+        ResponseEntity<Response<TripAllDetail>> reTripDetail = new ResponseEntity<>(tripDetailResponse, HttpStatus.OK);
+
+        Mockito.when(restTemplate.exchange(
+                Mockito.anyString(),
+                Mockito.any(HttpMethod.class),
+                Mockito.any(HttpEntity.class),
+                Mockito.any(ParameterizedTypeReference.class)))
+                .thenReturn(reContacts).thenReturn(reTripDetail);
+
+        try (MockedStatic<ActiveSpan> activeSpan = Mockito.mockStatic(ActiveSpan.class)) {
+            Response result = preserveServiceImpl.preserve(oti, headers);
+            Assert.assertEquals(new Response<>(0, "Seat Not Enough", null), result);
+
+            activeSpan.verify(() -> ActiveSpan.tag("seat.economyAvailable", "3"));
+            activeSpan.verify(() -> ActiveSpan.tag("seat.checkResult", "not_enough"));
         }
     }
 

@@ -88,19 +88,24 @@ public class PreserveServiceImpl implements PreserveService {
             return new Response<>(0, response.getMsg(), null);
         } else {
             TripResponse tripResponse = gtdr.getTripResponse();
+            ActiveSpan.tag("seat.confortAvailable", String.valueOf(tripResponse.getConfortClass()));
+            ActiveSpan.tag("seat.economyAvailable", String.valueOf(tripResponse.getEconomyClass()));
             //LOGGER.info("TripResponse:" + tripResponse.toString());
             if (oti.getSeatType() == SeatClass.FIRSTCLASS.getCode()) {
                 if (tripResponse.getConfortClass() == 0) {
                     PreserveServiceImpl.LOGGER.warn("[preserve][Step 3][Check seat][Check seat is enough][TripId: {}]",oti.getTripId());
+                    ActiveSpan.tag("seat.checkResult", "not_enough");
                     return new Response<>(0, "Seat Not Enough", null);
                 }
             } else {
                 if (tripResponse.getEconomyClass() == SeatClass.SECONDCLASS.getCode() && tripResponse.getConfortClass() == 0) {
                     PreserveServiceImpl.LOGGER.warn("[preserve][Step 3][Check seat][Check seat is Not enough][TripId: {}]",oti.getTripId());
+                    ActiveSpan.tag("seat.checkResult", "not_enough");
                     return new Response<>(0, "Seat Not Enough", null);
                 }
             }
         }
+        ActiveSpan.tag("seat.checkResult", "pass");
         Trip trip = gtdr.getTrip();
         PreserveServiceImpl.LOGGER.info("[preserve][Step 3][Check tickets num][Tickets Enough]");
         //4.send the order request and set the order information
