@@ -160,6 +160,86 @@ public class PreserveServiceImplTest {
             activeSpan.verify(() -> ActiveSpan.tag("seat.checkResult", "pass"));
             activeSpan.verify(() -> ActiveSpan.tag("price.confortClass", "1.0"));
             activeSpan.verify(() -> ActiveSpan.tag("price.economyClass", "0.5"));
+            activeSpan.verify(() -> ActiveSpan.tag("seat.allocatedClass", "FirstClassSeat"));
+            activeSpan.verify(() -> ActiveSpan.tag("seat.allocatedNumber", "1"));
+        }
+    }
+
+    @Test
+    public void testPreserve_secondClassSeatAllocation() {
+        OrderTicketsInfo oti = OrderTicketsInfo.builder()
+                .accountId(UUID.randomUUID().toString())
+                .contactsId(UUID.randomUUID().toString())
+                .from("from_station")
+                .to("to_station")
+                .date(StringUtils.Date2String(new Date()))
+                .tripId("G1255")
+                .seatType(3)
+                .assurance(0)
+                .foodType(0)
+                .build();
+
+        Response okResponse = new Response<>(1, null, null);
+        ResponseEntity<Response> reOk = new ResponseEntity<>(okResponse, HttpStatus.OK);
+        Mockito.when(restTemplate.exchange(
+                Mockito.anyString(),
+                Mockito.any(HttpMethod.class),
+                Mockito.any(HttpEntity.class),
+                Mockito.any(Class.class)))
+                .thenReturn(reOk);
+
+        Contacts contacts = new Contacts();
+        contacts.setDocumentNumber("document_number");
+        contacts.setName("name");
+        contacts.setDocumentType(1);
+        Response<Contacts> contactsResponse = new Response<>(1, null, contacts);
+        ResponseEntity<Response<Contacts>> reContacts = new ResponseEntity<>(contactsResponse, HttpStatus.OK);
+
+        TripResponse tripResponse = new TripResponse();
+        tripResponse.setConfortClass(1);
+        tripResponse.setEconomyClass(1);
+        tripResponse.setStartTime(StringUtils.Date2String(new Date()));
+        TripAllDetail tripAllDetail = new TripAllDetail(true, "message", tripResponse, new Trip());
+        Response<TripAllDetail> tripDetailResponse = new Response<>(1, null, tripAllDetail);
+        ResponseEntity<Response<TripAllDetail>> reTripDetail = new ResponseEntity<>(tripDetailResponse, HttpStatus.OK);
+
+        TravelResult travelResult = new TravelResult();
+        travelResult.setRoute(new Route());
+        travelResult.setTrainType(new TrainType());
+        travelResult.setPrices( new HashMap<String, String>(){{ put("confortClass", "1.0"); put("economyClass", "0.5"); }} );
+        Response<TravelResult> travelResultResponse = new Response<>(1, null, travelResult);
+        ResponseEntity<Response<TravelResult>> reTravelResult = new ResponseEntity<>(travelResultResponse, HttpStatus.OK);
+
+        Ticket ticket = new Ticket();
+        ticket.setSeatNo(7);
+        Response<Ticket> ticketResponse = new Response<>(1, null, ticket);
+        ResponseEntity<Response<Ticket>> reTicket = new ResponseEntity<>(ticketResponse, HttpStatus.OK);
+
+        Order order = new Order();
+        order.setId(UUID.randomUUID().toString());
+        Response<Order> orderResponse = new Response<>(1, null, order);
+        ResponseEntity<Response<Order>> reOrder = new ResponseEntity<>(orderResponse, HttpStatus.OK);
+
+        User user = new User();
+        user.setEmail("email");
+        user.setUserName("user_name");
+        Response<User> userResponse = new Response<>(1, null, user);
+        ResponseEntity<Response<User>> reUser = new ResponseEntity<>(userResponse, HttpStatus.OK);
+
+        Mockito.when(restTemplate.exchange(
+                Mockito.anyString(),
+                Mockito.any(HttpMethod.class),
+                Mockito.any(HttpEntity.class),
+                Mockito.any(ParameterizedTypeReference.class)))
+                .thenReturn(reContacts).thenReturn(reTripDetail).thenReturn(reTravelResult)
+                .thenReturn(reTicket).thenReturn(reOrder).thenReturn(reUser);
+
+        try (MockedStatic<ActiveSpan> activeSpan = Mockito.mockStatic(ActiveSpan.class)) {
+            Response result = preserveServiceImpl.preserve(oti, headers);
+            Assert.assertEquals(new Response<>(1, "Success.", null), result);
+
+            activeSpan.verify(() -> ActiveSpan.tag("seat.allocatedClass", "SecondClassSeat"));
+            activeSpan.verify(() -> ActiveSpan.tag("seat.allocatedNumber", "7"));
         }
     }
 

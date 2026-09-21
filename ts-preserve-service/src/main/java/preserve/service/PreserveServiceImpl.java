@@ -163,6 +163,8 @@ public class PreserveServiceImpl implements PreserveService {
                     dipatchSeat(oti.getDate(),
                             order.getTrainNumber(), fromStationName, toStationName,
                             SeatClass.FIRSTCLASS.getCode(), firstClassTotalNum, stationList, headers);
+            ActiveSpan.tag("seat.allocatedClass", SeatClass.FIRSTCLASS.getName());
+            ActiveSpan.tag("seat.allocatedNumber", String.valueOf(ticket.getSeatNo()));
             order.setSeatNumber("" + ticket.getSeatNo());
             order.setSeatClass(SeatClass.FIRSTCLASS.getCode());
             order.setPrice(resultForTravel.getPrices().get("confortClass"));
@@ -172,6 +174,8 @@ public class PreserveServiceImpl implements PreserveService {
                     dipatchSeat(oti.getDate(),
                             order.getTrainNumber(), fromStationName, toStationName,
                             SeatClass.SECONDCLASS.getCode(), secondClassTotalNum, stationList, headers);
+            ActiveSpan.tag("seat.allocatedClass", SeatClass.SECONDCLASS.getName());
+            ActiveSpan.tag("seat.allocatedNumber", String.valueOf(ticket.getSeatNo()));
             order.setSeatClass(SeatClass.SECONDCLASS.getCode());
             order.setSeatNumber("" + ticket.getSeatNo());
             order.setPrice(resultForTravel.getPrices().get("economyClass"));
