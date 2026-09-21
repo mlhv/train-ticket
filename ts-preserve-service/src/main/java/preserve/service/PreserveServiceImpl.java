@@ -147,6 +147,8 @@ public class PreserveServiceImpl implements PreserveService {
             return new Response<>(0, re.getBody().getMsg(), null);
         }
         TravelResult resultForTravel = re.getBody().getData();
+        ActiveSpan.tag("price.confortClass", resultForTravel.getPrices().get("confortClass"));
+        ActiveSpan.tag("price.economyClass", resultForTravel.getPrices().get("economyClass"));
 
         order.setSeatClass(oti.getSeatType());
         PreserveServiceImpl.LOGGER.info("[preserve][Step 4][Do Order][Travel Date][Date is: {}]", oti.getDate().toString());

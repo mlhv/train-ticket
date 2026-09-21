@@ -158,6 +158,8 @@ public class PreserveServiceImplTest {
             activeSpan.verify(() -> ActiveSpan.tag("seat.confortAvailable", "1"));
             activeSpan.verify(() -> ActiveSpan.tag("seat.economyAvailable", "0"));
             activeSpan.verify(() -> ActiveSpan.tag("seat.checkResult", "pass"));
+            activeSpan.verify(() -> ActiveSpan.tag("price.confortClass", "1.0"));
+            activeSpan.verify(() -> ActiveSpan.tag("price.economyClass", "0.5"));
         }
     }
 
