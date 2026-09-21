@@ -17,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import edu.fudan.common.entity.*;
+import org.apache.skywalking.apm.toolkit.trace.ActiveSpan;
 import preserve.mq.RabbitSend;
 
 import java.util.Date;
@@ -46,6 +47,9 @@ public class PreserveServiceImpl implements PreserveService {
 
     @Override
     public Response preserve(OrderTicketsInfo oti, HttpHeaders headers) {
+        ActiveSpan.tag("workflow", "preserve");
+        ActiveSpan.tag("tripId", oti.getTripId());
+        ActiveSpan.tag("seatTypeRequested", String.valueOf(oti.getSeatType()));
         //1.detect ticket scalper
         //PreserveServiceImpl.LOGGER.info("[Step 1] Check Security");
 

@@ -11,11 +11,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.apache.skywalking.apm.toolkit.trace.ActiveSpan;
+import org.mockito.MockedStatic;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.web.client.RestTemplate;
 import edu.fudan.common.entity.*;
 
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.UUID;
@@ -28,6 +31,12 @@ public class PreserveServiceImplTest {
 
     @Mock
     private RestTemplate restTemplate;
+
+    @Mock
+    private preserve.mq.RabbitSend sendService;
+
+    @Mock
+    private org.springframework.cloud.client.discovery.DiscoveryClient discoveryClient;
 
     private HttpHeaders headers = new HttpHeaders();
     private HttpEntity requestEntity = new HttpEntity(headers);
@@ -97,14 +106,21 @@ public class PreserveServiceImplTest {
 
         //response for travel result
         TravelResult travelResult = new TravelResult();
-        travelResult.setPrices( new HashMap<String, String>(){{ put("confortClass", "1.0"); }} );
-        Response<TravelResult> response5 = new Response<>(null, null, travelResult);
+        Route route = new Route();
+        route.setStations(new ArrayList<>());
+        travelResult.setRoute(route);
+        TrainType trainType = new TrainType();
+        trainType.setConfortClass(100);
+        trainType.setEconomyClass(100);
+        travelResult.setTrainType(trainType);
+        travelResult.setPrices( new HashMap<String, String>(){{ put("confortClass", "1.0"); put("economyClass", "0.5"); }} );
+        Response<TravelResult> response5 = new Response<>(1, null, travelResult);
         ResponseEntity<Response<TravelResult>> re5 = new ResponseEntity<>(response5, HttpStatus.OK);
 
         //response for dipatchSeat()
         Ticket ticket = new Ticket();
         ticket.setSeatNo(1);
-        Response<Ticket> response6 = new Response<>(null, null, ticket);
+        Response<Ticket> response6 = new Response<>(1, null, ticket);
         ResponseEntity<Response<Ticket>> re6 = new ResponseEntity<>(response6, HttpStatus.OK);
 
         //response for createOrder()
@@ -129,10 +145,16 @@ public class PreserveServiceImplTest {
                 Mockito.any(HttpMethod.class),
                 Mockito.any(HttpEntity.class),
                 Mockito.any(ParameterizedTypeReference.class)))
-                .thenReturn(re2).thenReturn(re3).thenReturn(re4).thenReturn(re4).thenReturn(re5).thenReturn(re6).thenReturn(re7).thenReturn(re9);
+                .thenReturn(re2).thenReturn(re3).thenReturn(re5).thenReturn(re6).thenReturn(re7).thenReturn(re9);
 
-        Response result = preserveServiceImpl.preserve(oti, headers);
-        Assert.assertEquals(new Response<>(1, "Success.", null), result);
+        try (MockedStatic<ActiveSpan> activeSpan = Mockito.mockStatic(ActiveSpan.class)) {
+            Response result = preserveServiceImpl.preserve(oti, headers);
+            Assert.assertEquals(new Response<>(1, "Success.", null), result);
+
+            activeSpan.verify(() -> ActiveSpan.tag("workflow", "preserve"));
+            activeSpan.verify(() -> ActiveSpan.tag("tripId", "G1255"));
+            activeSpan.verify(() -> ActiveSpan.tag("seatTypeRequested", "2"));
+        }
     }
 
     @Test
