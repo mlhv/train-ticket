@@ -184,9 +184,7 @@ public class PreserveServiceImplTest {
             Assert.assertEquals(new Response<>(0, "Security check failed", null), result);
 
             activeSpan.verify(() -> ActiveSpan.tag("security.status", "fail"));
-            // ISSUE: Brief specifies: activeSpan.verify(() -> ActiveSpan.tag(Mockito.eq("seat.checkResult"), Mockito.anyString()), Mockito.never());
-            // However, MockedStatic.verify() does not support Mockito matchers in lambdas - this is incompatible with the API.
-            // The test correctly verifies early return by confirming security.status="fail" is the only tag called before returning.
+            activeSpan.verify(Mockito.never(), () -> ActiveSpan.tag(Mockito.eq("seat.checkResult"), Mockito.anyString()));
         }
     }
 
