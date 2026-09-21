@@ -125,7 +125,8 @@ public class PreserveServiceImplTest {
 
         //response for createOrder()
         Order order = new Order();
-        order.setId(UUID.randomUUID().toString());
+        String expectedOrderId = UUID.randomUUID().toString();
+        order.setId(expectedOrderId);
         order.setAccountId(UUID.randomUUID().toString());
         order.setTravelDate(StringUtils.Date2String(new Date()));
         order.setFrom("from_station");
@@ -162,6 +163,9 @@ public class PreserveServiceImplTest {
             activeSpan.verify(() -> ActiveSpan.tag("price.economyClass", "0.5"));
             activeSpan.verify(() -> ActiveSpan.tag("seat.allocatedClass", "FirstClassSeat"));
             activeSpan.verify(() -> ActiveSpan.tag("seat.allocatedNumber", "1"));
+            activeSpan.verify(() -> ActiveSpan.tag("order.id", expectedOrderId));
+            activeSpan.verify(() -> ActiveSpan.tag("order.price", "1.0"));
+            activeSpan.verify(() -> ActiveSpan.tag("order.status", "1"));
         }
     }
 

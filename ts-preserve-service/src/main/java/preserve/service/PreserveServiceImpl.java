@@ -188,6 +188,9 @@ public class PreserveServiceImpl implements PreserveService {
             PreserveServiceImpl.LOGGER.error("[preserve][Step 4][Do Order][Create Order Fail][OrderId: {},  Reason: {}]", order.getId(), cor.getMsg());
             return new Response<>(0, cor.getMsg(), null);
         }
+        ActiveSpan.tag("order.id", cor.getData().getId());
+        ActiveSpan.tag("order.price", order.getPrice());
+        ActiveSpan.tag("order.status", String.valueOf(cor.getStatus()));
         PreserveServiceImpl.LOGGER.info("[preserve][Step 4][Do Order][Do Order Complete]");
 
         Response returnResponse = new Response<>(1, "Success.", cor.getMsg());
