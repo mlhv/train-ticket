@@ -17,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import edu.fudan.common.entity.*;
+import org.apache.skywalking.apm.toolkit.trace.ActiveSpan;
 import preserve.mq.RabbitSend;
 
 import java.util.Date;
@@ -46,10 +47,14 @@ public class PreserveServiceImpl implements PreserveService {
 
     @Override
     public Response preserve(OrderTicketsInfo oti, HttpHeaders headers) {
+        ActiveSpan.tag("workflow", "preserve");
+        ActiveSpan.tag("tripId", oti.getTripId());
+        ActiveSpan.tag("seatTypeRequested", String.valueOf(oti.getSeatType()));
         //1.detect ticket scalper
         //PreserveServiceImpl.LOGGER.info("[Step 1] Check Security");
 
         Response result = checkSecurity(oti.getAccountId(), headers);
+        ActiveSpan.tag("security.status", result.getStatus() == 0 ? "fail" : "pass");
         if (result.getStatus() == 0) {
             PreserveServiceImpl.LOGGER.error("[preserve][Step 1][Check Security Fail][AccountId: {}]",oti.getAccountId());
             return new Response<>(0, result.getMsg(), null);
@@ -83,19 +88,24 @@ public class PreserveServiceImpl implements PreserveService {
             return new Response<>(0, response.getMsg(), null);
         } else {
             TripResponse tripResponse = gtdr.getTripResponse();
+            ActiveSpan.tag("seat.confortAvailable", String.valueOf(tripResponse.getConfortClass()));
+            ActiveSpan.tag("seat.economyAvailable", String.valueOf(tripResponse.getEconomyClass()));
             //LOGGER.info("TripResponse:" + tripResponse.toString());
             if (oti.getSeatType() == SeatClass.FIRSTCLASS.getCode()) {
                 if (tripResponse.getConfortClass() == 0) {
                     PreserveServiceImpl.LOGGER.warn("[preserve][Step 3][Check seat][Check seat is enough][TripId: {}]",oti.getTripId());
+                    ActiveSpan.tag("seat.checkResult", "not_enough");
                     return new Response<>(0, "Seat Not Enough", null);
                 }
             } else {
                 if (tripResponse.getEconomyClass() == SeatClass.SECONDCLASS.getCode() && tripResponse.getConfortClass() == 0) {
                     PreserveServiceImpl.LOGGER.warn("[preserve][Step 3][Check seat][Check seat is Not enough][TripId: {}]",oti.getTripId());
+                    ActiveSpan.tag("seat.checkResult", "not_enough");
                     return new Response<>(0, "Seat Not Enough", null);
                 }
             }
         }
+        ActiveSpan.tag("seat.checkResult", "pass");
         Trip trip = gtdr.getTrip();
         PreserveServiceImpl.LOGGER.info("[preserve][Step 3][Check tickets num][Tickets Enough]");
         //4.send the order request and set the order information
@@ -137,6 +147,8 @@ public class PreserveServiceImpl implements PreserveService {
             return new Response<>(0, re.getBody().getMsg(), null);
         }
         TravelResult resultForTravel = re.getBody().getData();
+        ActiveSpan.tag("price.confortClass", resultForTravel.getPrices().get("confortClass"));
+        ActiveSpan.tag("price.economyClass", resultForTravel.getPrices().get("economyClass"));
 
         order.setSeatClass(oti.getSeatType());
         PreserveServiceImpl.LOGGER.info("[preserve][Step 4][Do Order][Travel Date][Date is: {}]", oti.getDate().toString());
@@ -151,6 +163,8 @@ public class PreserveServiceImpl implements PreserveService {
                     dipatchSeat(oti.getDate(),
                             order.getTrainNumber(), fromStationName, toStationName,
                             SeatClass.FIRSTCLASS.getCode(), firstClassTotalNum, stationList, headers);
+            ActiveSpan.tag("seat.allocatedClass", SeatClass.FIRSTCLASS.getName());
+            ActiveSpan.tag("seat.allocatedNumber", String.valueOf(ticket.getSeatNo()));
             order.setSeatNumber("" + ticket.getSeatNo());
             order.setSeatClass(SeatClass.FIRSTCLASS.getCode());
             order.setPrice(resultForTravel.getPrices().get("confortClass"));
@@ -160,6 +174,8 @@ public class PreserveServiceImpl implements PreserveService {
                     dipatchSeat(oti.getDate(),
                             order.getTrainNumber(), fromStationName, toStationName,
                             SeatClass.SECONDCLASS.getCode(), secondClassTotalNum, stationList, headers);
+            ActiveSpan.tag("seat.allocatedClass", SeatClass.SECONDCLASS.getName());
+            ActiveSpan.tag("seat.allocatedNumber", String.valueOf(ticket.getSeatNo()));
             order.setSeatClass(SeatClass.SECONDCLASS.getCode());
             order.setSeatNumber("" + ticket.getSeatNo());
             order.setPrice(resultForTravel.getPrices().get("economyClass"));
@@ -168,10 +184,13 @@ public class PreserveServiceImpl implements PreserveService {
         PreserveServiceImpl.LOGGER.info("[preserve][Step 4][Do Order][Order Price][Price is: {}]", order.getPrice());
 
         Response<Order> cor = createOrder(order, headers);
+        ActiveSpan.tag("order.status", cor.getStatus() == 0 ? "fail" : "success");
         if (cor.getStatus() == 0) {
             PreserveServiceImpl.LOGGER.error("[preserve][Step 4][Do Order][Create Order Fail][OrderId: {},  Reason: {}]", order.getId(), cor.getMsg());
             return new Response<>(0, cor.getMsg(), null);
         }
+        ActiveSpan.tag("order.id", cor.getData().getId());
+        ActiveSpan.tag("order.price", order.getPrice());
         PreserveServiceImpl.LOGGER.info("[preserve][Step 4][Do Order][Do Order Complete]");
 
         Response returnResponse = new Response<>(1, "Success.", cor.getMsg());
