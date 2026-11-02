@@ -44,16 +44,34 @@ public class ValueCaptureFilter extends OncePerRequestFilter {
             return;
         }
         ContentCachingRequestWrapper req = new ContentCachingRequestWrapper(request);
-        ContentCachingResponseWrapper resp = new ContentCachingResponseWrapper(response);
+        UncommittingResponseWrapper resp = new UncommittingResponseWrapper(response);
+        boolean completed = false;
         try {
             chain.doFilter(req, resp);
+            completed = true;
         } finally {
             try {
                 capture(req, resp);
             } catch (Throwable ignored) {
                 // tagging must never break a request
             }
-            resp.copyBodyToResponse();
+            if (completed) {
+                resp.copyBodyToResponse();
+            } else {
+                // Hand the buffered bytes back without committing, so error handling
+                // upstream sees the same state as with capture off.
+                resp.copyBodyWithoutCommit();
+            }
+        }
+    }
+
+    private static final class UncommittingResponseWrapper extends ContentCachingResponseWrapper {
+        UncommittingResponseWrapper(HttpServletResponse response) {
+            super(response);
+        }
+
+        void copyBodyWithoutCommit() throws IOException {
+            copyBodyToResponse(false);
         }
     }
 
@@ -63,8 +81,9 @@ public class ValueCaptureFilter extends OncePerRequestFilter {
             tag("req.query", req.getQueryString());
         }
         byte[] reqBody = req.getContentAsByteArray();
-        if (reqBody.length > 0) {
-            tag("req.body", cap(reqBody, charsetOf(req.getContentType(), req.getCharacterEncoding()), maxBytes));
+        String reqType = req.getContentType();
+        if (reqBody.length > 0 && reqType != null && isJson(reqType)) {
+            tag("req.body", cap(reqBody, charsetOf(reqType, req.getCharacterEncoding()), maxBytes));
         }
         String type = resp.getContentType();
         if (type != null) {

@@ -128,5 +128,33 @@ public class ValueCaptureFilterTest {
         }
         assertEquals("{\"par", r.tags.get("resp.body"));
         assertEquals("{\"par", resp.getContentAsString());
+        assertFalse("response must not be committed on the exception path", resp.isCommitted());
+    }
+
+    @Test
+    public void jsonVariantsTagged() throws Exception {
+        for (String type : new String[] {"application/problem+json", "application/json;charset=UTF-8"}) {
+            Recorder r = new Recorder();
+            new ValueCaptureFilter(r, true, 16384).doFilter(new MockHttpServletRequest("GET", "/p"),
+                    new MockHttpServletResponse(), (rq, rs) -> write((HttpServletResponse) rs, type, "{\"a\":1}"));
+            assertEquals(type, "{\"a\":1}", r.tags.get("resp.body"));
+        }
+    }
+
+    @Test
+    public void taggerThrowsRequestStillSucceeds() throws Exception {
+        SpanTagger boom = (k, v) -> { throw new IllegalStateException("tag failed"); };
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+        new ValueCaptureFilter(boom, true, 16384).doFilter(post(), resp, JSON_CHAIN);
+        assertArrayEquals(JSON_RESP.getBytes(StandardCharsets.UTF_8), resp.getContentAsByteArray());
+    }
+
+    @Test
+    public void nonJsonRequestBodyNotTagged() throws Exception {
+        Recorder r = new Recorder();
+        MockHttpServletRequest req = post();
+        req.setContentType("text/plain");
+        new ValueCaptureFilter(r, true, 16384).doFilter(req, new MockHttpServletResponse(), JSON_CHAIN);
+        assertFalse(r.tags.containsKey("req.body"));
     }
 }
